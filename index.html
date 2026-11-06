@@ -14,7 +14,17 @@
   <div class="encabezado">
     <img class="logo" src="https://lh3.googleusercontent.com/d/1BietHtrozDahRJRE5vCeJ4DnmI8vo16H" alt="Logo SIGIR">
     <h2>SIGIR</h2>
-    <div class="sesion oculto" id="sesion"><span id="quien"></span><button type="button" onclick="salir()">Salir</button></div>
+    <div class="sesion oculto" id="sesion">
+      <button type="button" class="usuario-btn" onclick="menuPerfil(event)" aria-haspopup="true" aria-label="Menú de perfil">
+        <span class="mini" id="miniFoto"></span><span id="quien"></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="menu oculto" id="menu" onclick="event.stopPropagation()">
+        <div class="menu-cab"><b id="menuNombre"></b><small id="menuRol"></small></div>
+        <button type="button" onclick="abrirPerfil()">Mi perfil</button>
+        <button type="button" class="salir" onclick="salir()">Cerrar sesión</button>
+      </div>
+    </div>
   </div>
 
   <!-- LOGIN -->
@@ -53,7 +63,7 @@
   <!-- INICIO · ALUMNO -->
   <main class="vista oculto" id="vistaAlumno">
     <h1>Hola, <span id="nombreAlumno"></span></h1>
-    <p class="sub">Mira lo que han reportado otros alumnos. </p>
+    <p class="sub">Mira lo que han reportado otros alumnos, suma tu “yo también lo vi” y comenta con respeto.</p>
     <nav class="pestanas">
       <button id="tabFeed" onclick="irA('feed')">Inicio</button>
       <button id="tabNuevo" onclick="irA('nuevo')">Nuevo reporte</button>
@@ -108,7 +118,7 @@
     <div id="listaAdmin"></div>
   </main>
 
-    <!-- PERFIL (alumno y administrador) -->
+  <!-- PERFIL (alumno y administrador) -->
   <main class="vista oculto" id="vistaPerfil">
     <button class="claro volver" onclick="cerrarPerfil()">← Volver</button>
     <h1>Mi perfil</h1>
@@ -131,7 +141,6 @@
       </div>
     </div>
   </main>
-
 
   <div class="pie">Derechos reservados ©2026 CUCEI · Universidad de Guadalajara | Sitio desarrollado por SIGIR |<a href="https://transparencia.udg.mx/aviso-confidencialidad-integral"> Aviso de privacidad</a></div>
 
