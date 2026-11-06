@@ -1,7 +1,3 @@
-// ===== Conexión con el servidor =====
-// En Google Apps Script se usa google.script.run (Codigo.gs).
-// Fuera de Apps Script (abriendo index.html directo) se usa un modo LOCAL de prueba
-// que guarda los reportes en el navegador (localStorage). No es para producción.
 (function () {
   if (typeof google !== "undefined" && google.script && google.script.run) return;
   var USUARIOS = [
@@ -14,18 +10,9 @@
     try { localStorage.setItem(K, JSON.stringify(l)); }
     catch (e) { throw new Error("Almacenamiento local lleno. Usa menos fotos."); }
   }
-  function ph(a, b) {
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + a + '"/><stop offset="1" stop-color="' + b + '"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/><text x="400" y="320" font-family="Arial" font-size="40" fill="#fff" text-anchor="middle" opacity=".85">Foto de ejemplo</text></svg>';
-    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  }
-  function sembrar() {   // Reportes de ejemplo para ver el diseño del feed
-    try { if (localStorage.getItem("sigir_demo")) return; localStorage.setItem("sigir_demo", "1"); } catch (e) { return; }
-    var n = Date.now(), H = 3600000;
-    guardar(leer().concat([
-      { id: "d1", fecha: n - 3 * H, codigo: "100000417", edificio: "Edificio Q", lugar: "Aula 204", categoria: "Eléctrico", descripcion: "El proyector no enciende desde el lunes y el apagador hace chispas.", fotos: [ph("#062863", "#607ec9")], estado: "pendiente", nota: "", vistos: ["100000222", "100000333"], comentarios: [{ codigo: "100000222", texto: "Yo también lo vi, sigue igual hoy.", fecha: n - 2 * H }] },
-      { id: "d2", fecha: n - 26 * H, codigo: "100000222", edificio: "Edificio D", lugar: "Baños planta baja", categoria: "Plomería / agua", descripcion: "Fuga de agua en el lavabo, el piso está muy resbaloso.", fotos: [ph("#1c4c96", "#062863"), ph("#607ec9", "#1c4c96")], estado: "visto", nota: "Ya se avisó a mantenimiento.", vistos: ["100000417"], comentarios: [] },
-      { id: "d3", fecha: n - 80 * H, codigo: "100000333", edificio: "Biblioteca", lugar: "Segundo piso", categoria: "Aire acondicionado", descripcion: "El aire no enfría y hace mucho ruido.", fotos: [ph("#0a3580", "#607ec9")], estado: "resuelto", nota: "Equipo reparado.", vistos: [], comentarios: [{ codigo: "100000417", texto: "Ya funciona, gracias.", fecha: n - 20 * H }] }
-    ]));
+  function quitarDemo() {   // elimina los reportes de ejemplo de versiones anteriores
+    var l = leer(), limpio = l.filter(function (r) { return !/^d[123]$/.test(r.id); });
+    if (limpio.length != l.length) guardar(limpio);
   }
   function ses(t) { if (!sesiones[t]) throw new Error("Tu sesión expiró. Vuelve a ingresar."); return sesiones[t]; }
   var api = {
@@ -37,7 +24,7 @@
       return { token: t, usuario: x.usuario, tipo: x.tipo };
     },
     listar: function (t) {
-      ses(t); sembrar(); var l = leer();
+      ses(t); quitarDemo(); var l = leer();
       return l.sort(function (a, b) { return b.fecha - a.fecha; });
     },
     crearReporte: function (t, d) {
