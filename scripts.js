@@ -362,6 +362,68 @@ function comentar(id, rapido) {
 }
 function aprobar(id) { google.script.run.withSuccessHandler(cargar).withFailureHandler(falla).aprobarFoto(sesion.token, id); }
 
+// ===== PERFIL (alumno y administrador) =====
+var yo = null;
+var ROLES = { alumno: "Alumno", academico: "Coordinación · Administrador" };
+function pintarAvatar(el, foto, nombre) {
+  el.style.backgroundImage = foto ? 'url("' + foto + '")' : "none";
+  el.textContent = foto ? "" : String(nombre || "?").trim().charAt(0).toUpperCase();
+}
+function cargarPerfil() {
+  google.script.run.withSuccessHandler(function (p) { yo = p; pintarPerfil(); }).withFailureHandler(falla).perfil(sesion.token);
+}
+function pintarPerfil() {
+  if (!yo) return;
+  var corto = String(yo.nombre).split(" ")[0];
+  $("quien").textContent = corto; $("nombreAlumno").textContent = corto;
+  $("menuNombre").textContent = yo.nombre; $("menuRol").textContent = ROLES[yo.tipo] || "";
+  pintarAvatar($("miniFoto"), yo.foto, yo.nombre); pintarAvatar($("fotoGrande"), yo.foto, yo.nombre);
+  $("pf_nombre").textContent = yo.nombre; $("pf_usuario").textContent = yo.usuario;
+  $("pf_correo").textContent = yo.correo; $("pf_programa").textContent = yo.programa; $("pf_tipo").textContent = ROLES[yo.tipo] || "";
+  $("pf_programa_et").textContent = yo.tipo == "alumno" ? "Programa educativo" : "Área";
+  $("pf_usuario_et").textContent = yo.tipo == "alumno" ? "Código de estudiante" : "Usuario";
+  $("quitarFoto").classList.toggle("oculto", !yo.foto);
+}
+function menuPerfil(e) { e.stopPropagation(); $("menu").classList.toggle("oculto"); }
+document.addEventListener("click", function () { $("menu").classList.add("oculto"); });
+document.addEventListener("keydown", function (e) { if (e.key == "Escape") $("menu").classList.add("oculto"); });
+function abrirPerfil() {
+  $("menu").classList.add("oculto");
+  $("vistaAlumno").classList.add("oculto"); $("vistaAdmin").classList.add("oculto");
+  $("vistaPerfil").classList.remove("oculto"); $("msgPerfil").textContent = ""; window.scrollTo(0, 0);
+}
+function cerrarPerfil() {
+  $("vistaPerfil").classList.add("oculto");
+  $(sesion.tipo == "alumno" ? "vistaAlumno" : "vistaAdmin").classList.remove("oculto");
+}
+function recortarCuadrado(file) {
+  return new Promise(function (ok) {
+    var i = new Image();
+    i.onload = function () {
+      var l = Math.min(i.width, i.height), c = document.createElement("canvas"); c.width = c.height = 256;
+      c.getContext("2d").drawImage(i, (i.width - l) / 2, (i.height - l) / 2, l, l, 0, 0, 256, 256);
+      ok(c.toDataURL("image/jpeg", 0.82));
+    };
+    i.src = URL.createObjectURL(file);
+  });
+}
+function guardarFotoPerfil(d, texto) {
+  google.script.run.withSuccessHandler(function () {
+    yo.foto = d; pintarPerfil(); var m = $("msgPerfil"); m.className = "msg"; m.textContent = texto;
+  }).withFailureHandler(falla).guardarFoto(sesion.token, d);
+}
+function quitarFotoPerfil() { guardarFotoPerfil("", "✓ Foto eliminada."); }
+$("fotoPerfil").onchange = async function (e) {
+  var f = e.target.files[0]; if (!f) return;
+  var m = $("msgPerfil"); m.className = "msg"; m.textContent = "Analizando imagen…";
+  var d = await recortarCuadrado(f);
+  var img = await new Promise(function (ok) { var im = new Image(); im.onload = function () { ok(im); }; im.src = d; });
+  var nivel = await analizarImagen(img);
+  e.target.value = "";
+  if (nivel == "bloqueada") { m.className = "msg mal"; m.textContent = "Esa imagen no está permitida como foto de perfil."; return; }
+  guardarFotoPerfil(d, "✓ Foto actualizada.");
+};
+
   // ===== Carrusel: cambia de imagen cada 5 segundos =====
   var fotos = document.querySelectorAll(".foto");
   var actual = 0;
