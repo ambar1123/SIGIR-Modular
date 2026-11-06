@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIGIR</title>
+
+  <link rel="stylesheet" href="estilos.css">
+</head>
+
+<body>
+
+  <div class="encabezado">
+    <img class="logo" src="https://lh3.googleusercontent.com/d/1BietHtrozDahRJRE5vCeJ4DnmI8vo16H" alt="Logo SIGIR">
+    <h2>SIGIR</h2>
+    <div class="sesion oculto" id="sesion"><span id="quien"></span><button type="button" onclick="salir()">Salir</button></div>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="contenedor" id="vistaLogin">
+    <div class="caja">
+
+      <!-- Inicio de Sesión -->
+      <div class="izquierda">
+        <h1>Inicio de sesión</h1>
+        <p>Por favor ingrese sus datos</p>
+
+        <label>Código o usuario</label>
+        <input type="text" id="usuario" placeholder="Ej. 220621311">
+
+        <label>Contraseña</label>
+        <input type="password" id="contrasena" placeholder="Contraseña">
+        <button type="button" class="ojo" id="ojo" onclick="verContrasena()">Mostrar contraseña</button>
+        <button type="button" class="olvide" onclick="olvideContrasena()">¿Olvidaste tu contraseña?</button>
+
+        <button id="btnIngresar" onclick="iniciarSesion()">Ingresar</button>
+
+        <p class="error" id="mensajeError"></p>
+      </div>
+
+      <!-- Imágenes que cambian -->
+      <div class="derecha">
+        <img class="foto activa" src="https://lh3.googleusercontent.com/d/1jCVBbXCUUL_gtMrmVjNp2-wUioUW-2Uz" alt="">
+        <img class="foto" src="https://lh3.googleusercontent.com/d/1PrKfWtMldcJC01qZkEVBEMK8HoI_A0PP" alt="">
+        <img class="foto" src="https://lh3.googleusercontent.com/d/1pAJgkuiqw7Tg_g6k8kA0gqdaB3TkWOyY" alt="">
+        <img class="foto" src="https://lh3.googleusercontent.com/d/1_fN44SQMZwqhltdXwPbjP1pl7sLqo-gC" alt="">
+      </div>
+
+    </div>
+  </div>
+
+  <!-- INICIO · ALUMNO -->
+  <main class="vista oculto" id="vistaAlumno">
+    <h1>Hola, <span id="nombreAlumno"></span></h1>
+    <p class="sub">Mira lo que han reportado otros alumnos, suma tu “yo también lo vi” y comenta con respeto.</p>
+    <nav class="pestanas">
+      <button id="tabFeed" onclick="irA('feed')">Inicio</button>
+      <button id="tabNuevo" onclick="irA('nuevo')">Nuevo reporte</button>
+      <button id="tabMios" onclick="irA('mios')">Mis reportes</button>
+    </nav>
+
+    <section id="pFeed"><div class="feed" id="feed"></div></section>
+
+    <section id="pNuevo" class="oculto">
+      <div class="tarjeta">
+        <h3>Nuevo reporte</h3>
+        <label>Edificio</label><select id="edificio"></select>
+        <label>Salón o lugar</label><input type="text" id="lugar" placeholder="Ej. Aula 204, baños planta baja">
+        <label>Tipo de falla</label>
+        <select id="categoria"><option>Eléctrico</option><option>Plomería / agua</option><option>Mobiliario</option><option>Techo / paredes</option><option>Aire acondicionado</option><option>Red / internet</option><option>Limpieza</option><option>Otro</option></select>
+        <label>Descripción</label><textarea id="descripcion" rows="4" placeholder="Describe la falla"></textarea>
+        <label>Fotos de evidencia (hasta 4)</label><input type="file" id="archivos" accept="image/*" multiple>
+        <p class="msg" id="msgFotos"></p>
+        <div class="evid" id="previa"></div>
+        <button class="principal" id="btnEnviar" onclick="enviarReporte()">Enviar reporte</button>
+        <p class="msg" id="msgReporte"></p>
+        <p class="meta">Las fotos se revisan automáticamente. No se permiten imágenes ofensivas ni lenguaje grosero.</p>
+      </div>
+    </section>
+
+    <section id="pMios" class="oculto">
+      <div class="resumen">
+        <div class="dato"><b id="a_total">0</b><span>Mis reportes</span></div>
+        <div class="dato p"><b id="a_pendiente">0</b><span>Pendientes</span></div>
+        <div class="dato v"><b id="a_visto">0</b><span>Vistos</span></div>
+        <div class="dato r"><b id="a_resuelto">0</b><span>Resueltos</span></div>
+      </div>
+      <div id="listaAlumno"></div>
+    </section>
+  </main>
+
+  <!-- INICIO · ADMINISTRADOR -->
+  <main class="vista oculto" id="vistaAdmin">
+    <h1>Panel de coordinación</h1>
+    <p class="sub">Revisa los reportes de los alumnos, márcalos como vistos y ciérralos cuando se resuelvan.</p>
+    <div class="resumen">
+      <div class="dato"><b id="m_total">0</b><span>Total</span></div>
+      <div class="dato p"><b id="m_pendiente">0</b><span>Pendientes</span></div>
+      <div class="dato v"><b id="m_visto">0</b><span>Vistos</span></div>
+      <div class="dato r"><b id="m_resuelto">0</b><span>Resueltos</span></div>
+    </div>
+    <div class="filtros">
+      <select id="fEstado" onchange="pintar()"><option value="">Todos los estados</option><option value="pendiente">Pendientes</option><option value="visto">Vistos</option><option value="resuelto">Resueltos</option></select>
+      <select id="fEdificio" onchange="pintar()"><option value="">Todos los edificios</option></select>
+      <button class="claro" onclick="cargar()">Actualizar</button>
+    </div>
+    <div id="listaAdmin"></div>
+  </main>
+
+  <div class="pie">Derechos reservados ©2026 CUCEI · Universidad de Guadalajara | Sitio desarrollado por SIGIR |<a href="https://transparencia.udg.mx/aviso-confidencialidad-integral"> Aviso de privacidad</a></div>
+
+  <script src="scripts.js"></script>
+
+</body>
+</html>
