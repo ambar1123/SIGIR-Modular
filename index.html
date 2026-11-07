@@ -33,6 +33,7 @@
 
       <!-- Inicio de Sesión -->
       <div class="izquierda">
+       <div id="formLogin">
         <h1>Inicio de sesión</h1>
         <p>Por favor ingrese sus datos</p>
 
@@ -47,6 +48,43 @@
         <button id="btnIngresar" onclick="iniciarSesion()">Ingresar</button>
 
         <p class="error" id="mensajeError"></p>
+        <p class="cambio">¿No tienes cuenta? <button type="button" class="enlace" onclick="mostrarRegistro()">Crear cuenta</button></p>
+       </div>
+
+       <!-- Crear cuenta -->
+       <div id="formRegistro" class="oculto">
+        <h1>Crear cuenta</h1>
+        <p>Solo para alumnos de CUCEI. Usa tus datos institucionales.</p>
+
+        <label for="r_codigo">Código de estudiante</label>
+        <input type="text" id="r_codigo" inputmode="numeric" maxlength="9" placeholder="9 dígitos" autocomplete="username">
+
+        <label for="r_nombre">Nombre completo</label>
+        <input type="text" id="r_nombre" autocomplete="name" placeholder="Nombre(s) y apellidos">
+
+        <label for="r_correo">Correo institucional</label>
+        <input type="email" id="r_correo" placeholder="usuario@alumnos.udg.mx" autocomplete="email">
+
+        <label for="r_programa">Programa educativo</label>
+        <select id="r_programa"></select>
+
+        <label for="r_tel">Teléfono (opcional)</label>
+        <input type="tel" id="r_tel" maxlength="12" placeholder="33 1234 5678" autocomplete="tel">
+
+        <div class="fila2">
+          <div><label for="r_pass">Contraseña</label><input type="password" id="r_pass" autocomplete="new-password" oninput="fuerzaPass()"></div>
+          <div><label for="r_pass2">Confirmar</label><input type="password" id="r_pass2" autocomplete="new-password"></div>
+        </div>
+        <div class="fuerza"><i id="barraFuerza"></i></div>
+        <small class="meta" id="txtFuerza">Mínimo 8 caracteres, con letras y números.</small><br>
+        <button type="button" class="ojo" id="ojoR" onclick="verContrasenaR()">Mostrar contraseñas</button>
+
+        <label class="acepto"><input type="checkbox" id="r_acepto"> <span>Acepto el <a href="https://transparencia.udg.mx/aviso-confidencialidad-integral" target="_blank" rel="noopener">aviso de privacidad</a></span></label>
+
+        <button id="btnRegistro" onclick="crearCuenta()">Crear cuenta</button>
+        <p class="error" id="msgRegistro"></p>
+        <p class="cambio">¿Ya tienes cuenta? <button type="button" class="enlace" onclick="mostrarLogin()">Inicia sesión</button></p>
+       </div>
       </div>
 
       <!-- Imágenes que cambian -->
