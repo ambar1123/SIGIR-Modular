@@ -220,3 +220,14 @@ button:focus-visible { outline: 3px solid var(--cielo); outline-offset: 2px; }
   .vista h1 { font-size: 25px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- TELÉFONO EDITABLE ---------- */
+.editable { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.editable input { width: 180px; flex: none; }
+.editable input[readonly] { background: var(--fondo); color: var(--gris-osc); border-color: #e1e6f1; cursor: not-allowed; }
+.editable input[readonly]:focus { box-shadow: none; border-color: #e1e6f1; }
+
+.vista .btn-tel { width: auto; margin: 0; padding: 10px 22px; font-size: 14px; }
+.vista .btn-tel.editar { background: #fff; color: var(--marino); border: 1.5px solid var(--marino); box-shadow: none; }
+.vista .btn-tel.editar:hover { background: var(--fondo); box-shadow: none; transform: none; }
+.campo .msg { margin-top: 6px; }

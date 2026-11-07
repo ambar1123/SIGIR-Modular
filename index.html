@@ -76,7 +76,7 @@
       <div class="tarjeta">
         <h3>Nuevo reporte</h3>
         <label>Edificio</label><select id="edificio"></select>
-        <label>Salón o lugar</label><input type="text" id="lugar" placeholder="Ej. Aula 204, baños planta baja">
+        <label>Salón o lugar</label><input type="text" id="lugar" placeholder="Ej. Aula 20, baños planta baja">
         <label>Tipo de falla</label>
         <select id="categoria"><option>Eléctrico</option><option>Plomería / agua</option><option>Mobiliario</option><option>Techo / paredes</option><option>Aire acondicionado</option><option>Red / internet</option><option>Limpieza</option><option>Otro</option></select>
         <label>Descripción</label><textarea id="descripcion" rows="4" placeholder="Describe la falla"></textarea>
@@ -137,6 +137,14 @@
         <div class="campo"><label>Correo institucional</label><div class="valor"><span id="pf_correo"></span><svg class="candado" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
         <div class="campo"><label id="pf_programa_et">Programa educativo</label><div class="valor"><span id="pf_programa"></span><svg class="candado" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
         <div class="campo"><label>Tipo de cuenta</label><div class="valor"><span id="pf_tipo"></span><svg class="candado" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div></div>
+        <div class="campo"><label for="pf_telefono">Número de teléfono</label>
+          <div class="editable">
+            <input type="tel" id="pf_telefono" placeholder="Ej. 33 1234 5678" maxlength="14">
+            <button type="button" class="btn-tel" id="btnTelefono" onclick="telGuardar()">Guardar</button>
+            <button type="button" class="btn-tel editar" id="btnEditarTel" onclick="telEditar()" style="display:none">Editar</button>
+          </div>
+          <p class="msg" id="msgTelefono"></p>
+        </div>
         <p class="meta">Si algún dato es incorrecto, acude a la Coordinación para solicitar la corrección.</p>
       </div>
     </div>

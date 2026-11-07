@@ -1,7 +1,7 @@
 (function () {
   if (typeof google !== "undefined" && google.script && google.script.run) return;
   var USUARIOS = [
-    { usuario: "220621311",    contrasena: "sigir2026", tipo: "alumno", nombre: "Nombre del Alumno", correo: "220621311@alumnos.udg.mx", programa: "Ingeniería en Computación" },
+    { usuario: "220621311",    contrasena: "sigir2026", tipo: "alumno", nombre: "Saul Alejandro Angel Garcia", correo: "saul.angel2131@alumnos.udg.mx", programa: "Ingeniería en Computación" },
     { usuario: "coordinacion", contrasena: "sigir2026", tipo: "academico", nombre: "Coordinación de Infraestructura", correo: "coordinacion@cucei.udg.mx", programa: "Coordinación de Infraestructura" }
   ];
   var K = "sigir_reportes", sesiones = {};
@@ -446,3 +446,47 @@ $("fotoPerfil").onchange = async function (e) {
     if (actual == fotos.length) { actual = 0; }
     fotos[actual].classList.add("activa");
   }, 5000);
+
+ // ===== TELÉFONO =====
+function telModo(bloqueado) {
+  document.getElementById("pf_telefono").readOnly = bloqueado;
+  document.getElementById("btnTelefono").style.display  = bloqueado ? "none" : "inline-block";
+  document.getElementById("btnEditarTel").style.display = bloqueado ? "inline-block" : "none";
+}
+
+function telEditar() {
+  document.getElementById("msgTelefono").textContent = "";
+  telModo(false);
+  document.getElementById("pf_telefono").focus();
+}
+
+function telGuardar() {
+  var campo = document.getElementById("pf_telefono");
+  var msg = document.getElementById("msgTelefono");
+  var tel = campo.value.replace(/\D/g, "");
+
+  if (tel.length != 10) {
+    msg.style.color = "red";
+    msg.textContent = "Escribe un número de 10 dígitos.";
+    return;
+  }
+
+  campo.value = tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3");
+  telModo(true);
+  msg.style.color = "green";
+  msg.textContent = "Teléfono guardado.";
+
+  var usuario = document.getElementById("pf_usuario").textContent.trim();
+  try { localStorage.setItem("tel_" + usuario, tel); } catch (e) {}
+  try { google.script.run.guardarTelefono(usuario, tel); } catch (e) {}
+}
+
+// Llama esto al abrir el perfil (después de llenar pf_usuario)
+function telCargar() {
+  var usuario = document.getElementById("pf_usuario").textContent.trim();
+  var tel = "";
+  try { tel = localStorage.getItem("tel_" + usuario) || ""; } catch (e) {}
+  document.getElementById("pf_telefono").value = tel ? tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3") : "";
+  document.getElementById("msgTelefono").textContent = "";
+  telModo(tel != "");   // si ya tiene número, entra bloqueado con Editar
+}
