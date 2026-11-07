@@ -54,9 +54,13 @@
        <!-- Crear cuenta -->
        <div id="formRegistro" class="oculto">
         <h1>Crear cuenta</h1>
-        <p>Solo para alumnos de CUCEI. Usa tus datos institucionales.</p>
+        <p>Para alumnos y personal administrativo de CUCEI.</p>
+        <div class="tipo-cuenta">
+          <button type="button" id="tAlumno" class="on" onclick="tipoRegistro('alumno')">Alumno</button>
+          <button type="button" id="tAdmin" onclick="tipoRegistro('administrativo')">Administrativo</button>
+        </div>
 
-        <label for="r_codigo">Código de estudiante</label>
+        <label for="r_codigo" id="r_codigo_et">Código de estudiante</label>
         <input type="text" id="r_codigo" inputmode="numeric" maxlength="9" placeholder="9 dígitos" autocomplete="username">
 
         <label for="r_nombre">Nombre completo</label>
@@ -65,7 +69,7 @@
         <label for="r_correo">Correo institucional</label>
         <input type="email" id="r_correo" placeholder="usuario@alumnos.udg.mx" autocomplete="email">
 
-        <label for="r_programa">Programa educativo</label>
+        <label for="r_programa" id="r_programa_et">Programa educativo</label>
         <select id="r_programa"></select>
 
         <label for="r_tel">Teléfono (opcional)</label>
@@ -116,7 +120,14 @@
         <label>Edificio</label><select id="edificio"></select>
         <label>Salón o lugar</label><input type="text" id="lugar" placeholder="Ej. Aula 20, baños planta baja">
         <label>Tipo de falla</label>
-        <select id="categoria"><option>Eléctrico</option><option>Plomería / agua</option><option>Mobiliario</option><option>Techo / paredes</option><option>Aire acondicionado</option><option>Red / internet</option><option>Limpieza</option><option>Otro</option></select>
+        <select id="categoria"><option>Aire acondicionado</option><option>Carpintería</option><option>Cristales / aluminio / plafones</option><option>Eléctrico</option><option>Herrería</option><option>Plomería / agua</option><option>Techo / paredes</option><option>Jardinería</option><option>Limpieza</option><option>Pintura</option><option>Cerrajería</option><option>Red / internet</option><option>Otro</option></select>
+          <div id="extraAdmin" class="oculto">
+            <label>Tipo de mantenimiento</label>
+            <select id="tipoMant"><option>Correctivo</option><option>Preventivo</option></select>
+            <label>Teléfono de contacto</label>
+            <input type="tel" id="telSolicitante" maxlength="12" placeholder="33 1234 5678">
+            <p class="meta">Al enviar se genera tu oficio de Solicitud de Mantenimiento para Servicios Generales.</p>
+          </div>
         <label>Descripción</label><textarea id="descripcion" rows="4" placeholder="Describe la falla"></textarea>
         <label>Fotos de evidencia (hasta 4)</label><input type="file" id="archivos" accept="image/*" multiple>
         <p class="msg" id="msgFotos"></p>
@@ -140,9 +151,8 @@
 
   <!-- INICIO · ADMINISTRADOR -->
   <main class="vista oculto" id="vistaAdmin">
-    <h1>Panel de coordinación</h1>
-    <p class="sub">Revisa los reportes de los alumnos, márcalos como vistos y ciérralos cuando se resuelvan.</p>
-    <div class="resumen">
+    <h1>Panel de Servicios Generales</h1>
+    <p class="sub">Revisa los reportes de alumnos y administrativos, márcalos como vistos y ciérralos cuando se resuelvan.</p><div class="resumen">
       <div class="dato"><b id="m_total">0</b><span>Total</span></div>
       <div class="dato p"><b id="m_pendiente">0</b><span>Pendientes</span></div>
       <div class="dato v"><b id="m_visto">0</b><span>Vistos</span></div>
@@ -151,6 +161,7 @@
     <div class="filtros">
       <select id="fEstado" onchange="pintar()"><option value="">Todos los estados</option><option value="pendiente">Pendientes</option><option value="visto">Vistos</option><option value="resuelto">Resueltos</option></select>
       <select id="fEdificio" onchange="pintar()"><option value="">Todos los edificios</option></select>
+      <select id="fRol" onchange="pintar()"><option value="">Alumnos y administrativos</option><option value="alumno">Solo alumnos</option><option value="administrativo">Solo administrativos</option></select>
       <button class="claro" onclick="cargar()">Actualizar</button>
     </div>
     <div id="listaAdmin"></div>
@@ -187,7 +198,14 @@
       </div>
     </div>
   </main>
-
+    <!-- OFICIO DE MANTENIMIENTO -->
+  <div class="oficio-fondo oculto" id="oficio">
+    <div class="oficio-acc">
+      <button onclick="window.print()">Imprimir / Guardar PDF</button>
+      <button class="claro" onclick="cerrarOficio()">Cerrar</button>
+    </div>
+    <div class="hoja" id="hoja"></div>
+  </div>
   <div class="pie">Derechos reservados ©2026 CUCEI · Universidad de Guadalajara | Sitio desarrollado por SIGIR |<a href="https://transparencia.udg.mx/aviso-confidencialidad-integral"> Aviso de privacidad</a></div>
 
   <script src="scripts.js"></script>

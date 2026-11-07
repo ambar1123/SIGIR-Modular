@@ -1,8 +1,10 @@
 (function () {
   if (typeof google !== "undefined" && google.script && google.script.run) return;
+  // tipos: "alumno" y "administrativo" reportan; "academico" = Servicios Generales / CTA (atiende)
   var USUARIOS = [
     { usuario: "220621311",    contrasena: "sigir2026", tipo: "alumno", nombre: "Saul Alejandro Angel Garcia", correo: "saul.angel2131@alumnos.udg.mx", programa: "Ingeniería en Computación" },
-    { usuario: "coordinacion", contrasena: "sigir2026", tipo: "academico", nombre: "Coordinación de Infraestructura", correo: "coordinacion@cucei.udg.mx", programa: "Coordinación de Infraestructura" }
+    { usuario: "2950123",      contrasena: "sigir2026", tipo: "administrativo", nombre: "Administrativo de Prueba", correo: "administrativo.prueba@academicos.udg.mx", programa: "Secretaría Administrativa" },
+    { usuario: "coordinacion", contrasena: "sigir2026", tipo: "academico", nombre: "Servicios Generales y CTA", correo: "coordinacion@cucei.udg.mx", programa: "Servicios Generales / CTA" }
   ];
   var K = "sigir_reportes", sesiones = {};
   function leer() { try { return JSON.parse(localStorage.getItem(K) || "[]"); } catch (e) { return []; } }
@@ -38,19 +40,28 @@
     },
     crearReporte: function (t, d) {
       var s = ses(t);
-      if (s.tipo != "alumno") throw new Error("Solo los alumnos pueden crear reportes.");
+      if (s.tipo == "academico") throw new Error("Servicios Generales / CTA atiende los reportes, no los crea.");
       var mm = moderarTexto(d.lugar + " " + d.descripcion); if (mm) throw new Error(mm);
       var l = leer();
-      l.push({ id: "r" + Date.now(), fecha: Date.now(), codigo: s.usuario, edificio: d.edificio, lugar: d.lugar,
+      l.push({ id: "r" + Date.now(), fecha: Date.now(), codigo: s.usuario, rol: s.tipo, edificio: d.edificio, lugar: d.lugar,
                categoria: d.categoria, descripcion: d.descripcion, fotos: d.fotos.slice(0, 4), estado: "pendiente", nota: "", revision: !!d.revision, vistos: [], comentarios: [] });
-      guardar(l); return true;
+            var nuevo = l[l.length - 1];
+      if (s.tipo == "administrativo") {
+        var u = buscar(s.usuario);
+        nuevo.folio = "SG-" + new Date().getFullYear() + "-" + ("000" + (l.filter(function (x) { return x.folio; }).length + 1)).slice(-4);
+        nuevo.solicitante = { nombre: u.nombre, area: u.programa, telefono: d.telefono || "" };
+        nuevo.tipoMant = d.tipoMant || "Correctivo";
+        try { localStorage.setItem("tel_" + s.usuario, d.telefono); } catch (e) {}
+      }
+      guardar(l); return nuevo;
     },
     registrar: async function (d) {
       var e = validarRegistro(d, d.pass, true); if (e) throw new Error(e);
       if (buscar(d.codigo)) throw new Error("Ese código ya tiene una cuenta. Inicia sesión.");
       var l = cuentas();
       if (l.some(function (c) { return c.correo == d.correo; }) || USUARIOS.some(function (c) { return c.correo == d.correo; })) throw new Error("Ese correo ya está registrado.");
-      l.push({ usuario: d.codigo, hash: await hash(d.codigo, d.pass), tipo: "alumno", nombre: d.nombre, correo: d.correo, programa: d.programa, fecha: Date.now() });
+      var tipo = d.tipo == "administrativo" ? "administrativo" : "alumno";   // nunca se puede crear una cuenta de Servicios Generales desde aquí
+      l.push({ usuario: d.codigo, hash: await hash(d.codigo, d.pass), tipo: tipo, nombre: d.nombre, correo: d.correo, programa: d.programa, fecha: Date.now() });
       try { localStorage.setItem(KC, JSON.stringify(l)); } catch (x) { throw new Error("No se pudo guardar la cuenta."); }
       if (d.telefono) { try { localStorage.setItem("tel_" + d.codigo, d.telefono); } catch (x) {} }
       return true;
@@ -60,17 +71,22 @@
       try { f = (JSON.parse(localStorage.getItem("sigir_fotos") || "{}"))[s.usuario] || ""; } catch (e) {}
       return { usuario: u.usuario, tipo: u.tipo, nombre: u.nombre, correo: u.correo, programa: u.programa, foto: f };
     },
-    guardarFoto: function (t, d) {   // lo único editable del perfil
+    guardarFoto: function (t, d) {
       var s = ses(t); if (d && d.indexOf("data:image/") != 0) throw new Error("Imagen no válida.");
       var m = {}; try { m = JSON.parse(localStorage.getItem("sigir_fotos") || "{}"); } catch (e) {}
       if (d) m[s.usuario] = d; else delete m[s.usuario];
       try { localStorage.setItem("sigir_fotos", JSON.stringify(m)); } catch (e) { throw new Error("No se pudo guardar la foto."); }
       return true;
     },
+    guardarTelefono: function (u, tel) {
+      if (!/^\d{10}$/.test(tel)) throw new Error("Teléfono inválido.");
+      try { localStorage.setItem("tel_" + u, tel); } catch (e) {}
+      return true;
+    },
     comentar: function (t, id, txt) {
       var s = ses(t), mm = moderarTexto(txt); if (mm) throw new Error(mm);
       var l = leer(), r = l.filter(function (x) { return x.id == id; })[0]; if (!r) throw new Error("Reporte no encontrado.");
-      (r.comentarios = r.comentarios || []).push({ codigo: s.usuario, texto: String(txt).trim(), fecha: Date.now() });
+      (r.comentarios = r.comentarios || []).push({ codigo: s.usuario, rol: s.tipo, texto: String(txt).trim(), fecha: Date.now() });
       guardar(l); return true;
     },
     alternarVisto: function (t, id) {
@@ -87,7 +103,8 @@
       var s = ses(t);
       if (s.tipo != "academico") throw new Error("Sin permiso.");
       var l = leer();
-      l.forEach(function (r) { if (r.id == id) { r.estado = estado; r.nota = nota || ""; r.revisor = s.usuario; } });
+            var quien = buscar(s.usuario);
+      l.forEach(function (r) { if (r.id == id) { r.estado = estado; r.nota = nota || ""; r.revisor = s.usuario; if (r.folio && !r.recibe) { r.recibe = quien.nombre; r.fechaRecepcion = Date.now(); } } });
       guardar(l); return true;
     }
   };
@@ -110,9 +127,12 @@
 })();
 
 var $ = function (id) { return document.getElementById(id); };
-  var EDIFICIOS = ["Edificio A","Edificio B","Edificio C","Edificio D","Edificio E","Edificio F","Edificio G","Edificio H","Edificio I","Edificio J","Edificio K","Edificio L","Edificio M","Edificio N","Edificio O","Edificio P","Edificio Q","Edificio R","Edificio S","Edificio T","Edificio U","Edificio V","Biblioteca","Cafetería","Estacionamiento","Otro"];
+  var EDIFICIOS = ["Edificio A","Edificio B","Edificio C","Edificio D","Edificio E","Edificio F","Edificio G","Edificio H","Edificio I","Edificio J","Edificio K","Edificio L","Edificio L2","Edificio M","Edificio N","Edificio O","Edificio P","Edificio Q","Edificio R","Edificio S","Edificio S2","Edificio T","Edificio U","Edificio V","Edificio V2","Edificio Y","Edificio X","Edificio Z","Edificio Z2","Lonaria","Biblioteca CID","Cafetería","Estacionamiento","CTA","Laboratorio de Ingenierías","Otro"];
   var ETIQUETA = { pendiente: "Pendiente", visto: "Visto", resuelto: "Resuelto" };
   var sesion = null, reportes = [], evidencias = [], hayRevision = false;
+
+  // Roles: alumno y administrativo reportan; academico = Servicios Generales / CTA (atiende)
+  function atiende() { return sesion && sesion.tipo == "academico"; }
 
   EDIFICIOS.forEach(function (e) {
     ["edificio", "fEdificio"].forEach(function (id) {
@@ -163,10 +183,12 @@ var $ = function (id) { return document.getElementById(id); };
     $("vistaLogin").classList.add("oculto");
     $("sesion").classList.remove("oculto");
     $("quien").textContent = sesion.usuario; cargarPerfil();
-    if (sesion.tipo == "alumno") {
+    if (!atiende()) {   // alumno o administrativo
       $("nombreAlumno").textContent = sesion.usuario;
       $("vistaAlumno").classList.remove("oculto"); irA("feed");
-    } else {
+      $("extraAdmin").classList.toggle("oculto", sesion.tipo != "administrativo");
+      try { $("telSolicitante").value = telOf(localStorage.getItem("tel_" + sesion.usuario) || ""); } catch (e) {}
+    } else {            // Servicios Generales / CTA
       $("vistaAdmin").classList.remove("oculto");
     }
     cargar();
@@ -191,36 +213,38 @@ var $ = function (id) { return document.getElementById(id); };
   function tarjeta(r, admin) {
     var f = new Date(Number(r.fecha)).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
     var h = '<div class="tarjeta ' + esc(r.estado) + '"><div class="arriba"><h3>' + esc(r.edificio) + " · " + esc(r.lugar) + '</h3><span class="chip ' + esc(r.estado) + '">' + ETIQUETA[r.estado] + "</span></div>";
-    h += '<div class="meta">' + esc(r.categoria) + " · " + f + (admin ? " · Código " + esc(r.codigo) : "") + "</div>";
+    var quien = (r.rol == "administrativo") ? " · Administrativo · Núm. " : " · Alumno · Código ";
+    h += '<div class="meta">' + esc(r.categoria) + " · " + f + (admin ? quien + esc(r.codigo) : "") + "</div>";
     h += "<p>" + esc(r.descripcion) + "</p>";
     h += '<div class="evid' + (r.revision && !admin ? " revision" : "") + '">' + r.fotos.map(function (u) { return '<img src="' + esc(u) + '" onclick="window.open(this.src)" alt="Evidencia">'; }).join("") + "</div>";
     if (admin && r.revision) h += '<div class="aviso"><span>Foto marcada para revisión por el filtro automático.</span><button class="claro" onclick="aprobar(\'' + r.id + '\')">Aprobar foto</button></div>';
-    if (!admin && r.nota) h += '<p class="meta"><b>Nota de coordinación:</b> ' + esc(r.nota) + "</p>";
+    if (!admin && r.nota) h += '<p class="meta"><b>Nota de Servicios Generales:</b> ' + esc(r.nota) + "</p>";
     if (admin) {
       h += '<input type="text" id="n' + r.id + '" placeholder="Nota (opcional)" value="' + esc(r.nota) + '" style="margin-top:10px">';
       h += '<div class="acciones"><button class="claro" onclick="cambiar(\'' + r.id + "','visto')\">Marcar visto</button>";
       h += "<button onclick=\"cambiar('" + r.id + "','resuelto')\">Marcar resuelto</button>";
       h += '<button class="claro" onclick="cambiar(\'' + r.id + "','pendiente')\">Reabrir</button></div>";
     }
+    if (r.folio) h += '<div class="aviso"><span>Oficio <b>' + esc(r.folio) + "</b>" + (r.recibe ? " · Recibido por " + esc(r.recibe) : " · Sin recibir") + '</span><button class="claro" onclick="verOficioId(\'' + r.id + '\')">Ver oficio</button></div>';
     return h + "</div>";
   }
 
   function pintar() {
     if (!sesion) return;
-    if (sesion.tipo == "alumno") {
+    if (!atiende()) {
       var mios = reportes.filter(function (r) { return r.codigo == sesion.usuario; });
       contar(mios, "a");
       $("listaAlumno").innerHTML = mios.length ? mios.map(function (r) { return tarjeta(r, false); }).join("") : '<p class="meta">Aún no has enviado reportes.</p>';
       $("feed").innerHTML = reportes.length ? reportes.map(post).join("") : '<p class="meta">Todavía no hay reportes. ¡Sé el primero en reportar!</p>';
     } else {
       contar(reportes, "m");
-      var fe = $("fEstado").value, fd = $("fEdificio").value;
-      var l = reportes.filter(function (r) { return (!fe || r.estado == fe) && (!fd || r.edificio == fd); });
+      var fe = $("fEstado").value, fd = $("fEdificio").value, fr = $("fRol").value;
+      var l = reportes.filter(function (r) { return (!fe || r.estado == fe) && (!fd || r.edificio == fd) && (!fr || (r.rol || "alumno") == fr); });
       $("listaAdmin").innerHTML = l.length ? l.map(function (r) { return tarjeta(r, true); }).join("") : '<p class="meta">No hay reportes con esos filtros.</p>';
     }
   }
 
-  // ===== ADMIN: cambiar estado =====
+  // ===== SERVICIOS GENERALES: cambiar estado =====
   function cambiar(id, estado) {
     var nota = $("n" + id).value.trim();
     google.script.run
@@ -229,7 +253,7 @@ var $ = function (id) { return document.getElementById(id); };
       .actualizar(sesion.token, id, estado, nota);
   }
 
-  // ===== ALUMNO: nuevo reporte con fotos =====
+  // ===== NUEVO REPORTE CON FOTOS =====
   function comprimir(archivo) {
     return new Promise(function (ok) {
       var img = new Image();
@@ -256,7 +280,7 @@ var $ = function (id) { return document.getElementById(id); };
       evidencias.push(d); $("previa").appendChild(img);
     }
     if (descartadas) { av.className = "msg mal"; av.textContent = descartadas + " foto(s) se descartaron por contenido inapropiado."; }
-    else if (hayRevision) av.textContent = "Una foto será revisada por coordinación antes de mostrarse a otros alumnos.";
+    else if (hayRevision) av.textContent = "Una foto será revisada por Servicios Generales antes de mostrarse a los demás.";
     else av.textContent = "";
   };
 
@@ -266,12 +290,17 @@ var $ = function (id) { return document.getElementById(id); };
     if (!d.lugar || !d.descripcion) { m.textContent = "Escribe el lugar y la descripción."; return; }
     var mm = moderarTexto(d.lugar + " " + d.descripcion); if (mm) { m.textContent = "Tu reporte no se envió. " + mm; return; }
     if (!evidencias.length) { m.textContent = "Agrega al menos una foto de evidencia."; return; }
+        if (sesion.tipo == "administrativo") {
+      d.tipoMant = $("tipoMant").value; d.telefono = $("telSolicitante").value.replace(/\D/g, "");
+      if (d.telefono.length != 10) { m.textContent = "Escribe tu teléfono de contacto (10 dígitos) para el oficio."; return; }
+    }
     var b = $("btnEnviar"); b.disabled = true; m.className = "msg"; m.textContent = "Enviando…";
     google.script.run
-      .withSuccessHandler(function () {
+      .withSuccessHandler(function (nuevo) {
         b.disabled = false; m.textContent = "✓ Reporte enviado.";
         $("lugar").value = ""; $("descripcion").value = ""; $("archivos").value = ""; evidencias = []; hayRevision = false; $("msgFotos").textContent = ""; irA("mios"); $("previa").innerHTML = "";
         cargar();
+        if (nuevo && nuevo.folio) verOficio(nuevo);
       })
       .withFailureHandler(function (e) { b.disabled = false; m.className = "msg mal"; m.textContent = (e && e.message) ? e.message.replace(/^Error: /, "") : "No se pudo enviar."; })
       .crearReporte(sesion.token, d);
@@ -345,7 +374,11 @@ async function analizarImagen(img) {
 // ===== FEED SOCIAL =====
 var ICO_OJO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 var ICO_COM = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-function autor(c) { return "Alumno ···" + String(c).slice(-3); }
+var QUIEN = { alumno: "Alumno", administrativo: "Administrativo" };
+function autor(c, rol) {
+  if (rol == "academico") return "Servicios Generales";
+  return (QUIEN[rol] || "Alumno") + " ···" + String(c).slice(-3);
+}
 function colorAv(c) { var p = ["#062863", "#1c4c96", "#607ec9"], h = 0; String(c).split("").forEach(function (x) { h += x.charCodeAt(0); }); return p[h % 3]; }
 function hace(ms) {
   var m = Math.floor((Date.now() - Number(ms)) / 60000);
@@ -358,15 +391,15 @@ var RAPIDOS = ["Yo también lo vi", "Sigue igual hoy", "Ya funciona"];
 function post(r) {
   var yo = sesion.usuario, vistos = r.vistos || [], cs = r.comentarios || [], vio = vistos.indexOf(yo) >= 0;
   var h = '<article class="post"><div class="post-top"><div class="av" style="background:' + colorAv(r.codigo) + '">' + esc(String(r.edificio).replace("Edificio ", "").charAt(0)) + "</div>";
-  h += '<div class="post-quien"><b>' + autor(r.codigo) + (r.codigo == yo ? ' <em class="tu">tú</em>' : "") + "</b><small>" + esc(r.edificio) + " · " + esc(r.lugar) + " · " + hace(r.fecha) + "</small></div>";
+  h += '<div class="post-quien"><b>' + autor(r.codigo, r.rol) + (r.codigo == yo ? ' <em class="tu">tú</em>' : "") + "</b><small>" + esc(r.edificio) + " · " + esc(r.lugar) + " · " + hace(r.fecha) + "</small></div>";
   h += '<span class="chip ' + esc(r.estado) + '">' + ETIQUETA[r.estado] + "</span></div>";
   h += '<div class="media' + (r.revision ? " revision" : "") + '">' + r.fotos.map(function (u) { return '<img src="' + esc(u) + '" alt="Evidencia" onclick="window.open(this.src)">'; }).join("");
-  if (r.revision) h += '<div class="vela">Foto en revisión por coordinación</div>';
+  if (r.revision) h += '<div class="vela">Foto en revisión por Servicios Generales</div>';
   h += '</div><div class="post-acc"><button class="reac' + (vio ? " on" : "") + '" onclick="alternarVisto(\'' + r.id + "')\">" + ICO_OJO + " Yo también lo vi · " + vistos.length + "</button>";
   h += '<span class="cuenta">' + ICO_COM + " " + cs.length + "</span></div>";
   h += '<div class="post-cuerpo"><span class="cat">' + esc(r.categoria) + "</span> " + esc(r.descripcion) + "</div>";
-  if (r.nota) h += '<div class="post-nota"><b>Coordinación:</b> ' + esc(r.nota) + "</div>";
-  h += '<div class="coms">' + cs.map(function (c) { return '<div class="com"><b>' + autor(c.codigo) + "</b> " + esc(c.texto) + " <small>" + hace(c.fecha) + "</small></div>"; }).join("") + "</div>";
+  if (r.nota) h += '<div class="post-nota"><b>Servicios Generales:</b> ' + esc(r.nota) + "</div>";
+  h += '<div class="coms">' + cs.map(function (c) { return '<div class="com"><b>' + autor(c.codigo, c.rol) + "</b> " + esc(c.texto) + " <small>" + hace(c.fecha) + "</small></div>"; }).join("") + "</div>";
   h += '<div class="rapidos">' + RAPIDOS.map(function (t) { return '<button class="rap" onclick="comentar(\'' + r.id + "','" + t + "')\">" + t + "</button>"; }).join("") + "</div>";
   h += '<div class="escribir"><input type="text" id="c' + r.id + '" maxlength="200" placeholder="Escribe un comentario respetuoso…" onkeydown="if(event.key==\'Enter\')comentar(\'' + r.id + "')\">";
   h += '<button class="pub" onclick="comentar(\'' + r.id + "')\">Publicar</button></div>";
@@ -393,10 +426,12 @@ function comentar(id, rapido) {
 }
 function aprobar(id) { google.script.run.withSuccessHandler(cargar).withFailureHandler(falla).aprobarFoto(sesion.token, id); }
 
-// ===== PERFIL (alumno y administrador) =====
-// Solo la foto se puede cambiar; los datos institucionales son de solo lectura.
+// ===== PERFIL (todos los roles) =====
+// Foto y teléfono se pueden cambiar; los datos institucionales son de solo lectura.
 var yo = null;
-var ROLES = { alumno: "Alumno", academico: "Coordinación · Administrador" };
+var ROLES = { alumno: "Alumno", administrativo: "Personal administrativo", academico: "Servicios Generales · CTA" };
+var ET_USUARIO = { alumno: "Código de estudiante", administrativo: "Número de trabajador", academico: "Usuario" };
+var ET_PROGRAMA = { alumno: "Programa educativo", administrativo: "Área o dependencia", academico: "Área" };
 function pintarAvatar(el, foto, nombre) {
   el.style.backgroundImage = foto ? 'url("' + foto + '")' : "none";
   el.textContent = foto ? "" : String(nombre || "?").trim().charAt(0).toUpperCase();
@@ -412,8 +447,8 @@ function pintarPerfil() {
   pintarAvatar($("miniFoto"), yo.foto, yo.nombre); pintarAvatar($("fotoGrande"), yo.foto, yo.nombre);
   $("pf_nombre").textContent = yo.nombre; $("pf_usuario").textContent = yo.usuario;
   $("pf_correo").textContent = yo.correo; $("pf_programa").textContent = yo.programa; $("pf_tipo").textContent = ROLES[yo.tipo] || "";
-  $("pf_programa_et").textContent = yo.tipo == "alumno" ? "Programa educativo" : "Área";
-  $("pf_usuario_et").textContent = yo.tipo == "alumno" ? "Código de estudiante" : "Usuario";
+  $("pf_programa_et").textContent = ET_PROGRAMA[yo.tipo] || "Área";
+  $("pf_usuario_et").textContent = ET_USUARIO[yo.tipo] || "Usuario";
   $("quitarFoto").classList.toggle("oculto", !yo.foto);
 }
 function menuPerfil(e) { e.stopPropagation(); $("menu").classList.toggle("oculto"); }
@@ -426,7 +461,7 @@ function abrirPerfil() {
 }
 function cerrarPerfil() {
   $("vistaPerfil").classList.add("oculto");
-  $(sesion.tipo == "alumno" ? "vistaAlumno" : "vistaAdmin").classList.remove("oculto");
+  $(atiende() ? "vistaAdmin" : "vistaAlumno").classList.remove("oculto");
 }
 function recortarCuadrado(file) {
   return new Promise(function (ok) {
@@ -456,25 +491,45 @@ $("fotoPerfil").onchange = async function (e) {
   guardarFotoPerfil(d, "✓ Foto actualizada.");
 };
 
-// ===== CREAR CUENTA =====
+// ===== CREAR CUENTA (alumno o administrativo) =====
 var PROGRAMAS = ["Ingeniería en Computación","Ingeniería Informática","Licenciatura en Informática","Ingeniería en Comunicaciones y Electrónica","Ingeniería Civil","Ingeniería Industrial","Ingeniería Mecánica Eléctrica","Ingeniería Mecatrónica","Ingeniería Química","Ingeniería Biomédica","Ingeniería Robótica","Ingeniería en Alimentos y Biotecnología","Ingeniería en Logística y Transporte","Licenciatura en Matemáticas","Licenciatura en Física","Licenciatura en Química","Químico Farmacobiólogo","Otro"];
-(function () {
-  var s = $("r_programa"), o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Selecciona tu programa…"; s.appendChild(o0);
-  PROGRAMAS.forEach(function (p) { var o = document.createElement("option"); o.textContent = p; s.appendChild(o); });
-})();
+var AREAS = ["Rectoría","Secretaría Académica","Secretaría Administrativa","Coordinación de Programas Docentes","Coordinación de Control Escolar","Coordinación de Personal","Coordinación de Finanzas","Coordinación de Extensión","Coordinación de Investigación y Posgrado","Coordinación de Tecnologías para el Aprendizaje","Biblioteca (CID)","División de Ciencias Básicas","División de Ingenierías","División de Electrónica y Computación","Coordinación de carrera","Departamento académico","Otra"];
+var tipoReg = "alumno";
+
+function llenarSelect(lista, primero) {
+  var s = $("r_programa"); s.innerHTML = "";
+  var o0 = document.createElement("option"); o0.value = ""; o0.textContent = primero; s.appendChild(o0);
+  lista.forEach(function (p) { var o = document.createElement("option"); o.textContent = p; s.appendChild(o); });
+}
+function tipoRegistro(t) {
+  tipoReg = t; var adm = t == "administrativo";
+  $("tAlumno").classList.toggle("on", !adm); $("tAdmin").classList.toggle("on", adm);
+  $("r_codigo_et").textContent = adm ? "Número de trabajador" : "Código de estudiante";
+  $("r_codigo").placeholder = adm ? "Ej. 2950123" : "9 dígitos";
+  $("r_correo").placeholder = adm ? "nombre.apellido@academicos.udg.mx" : "usuario@alumnos.udg.mx";
+  $("r_programa_et").textContent = adm ? "Área o dependencia" : "Programa educativo";
+  llenarSelect(adm ? AREAS : PROGRAMAS, adm ? "Selecciona tu área…" : "Selecciona tu programa…");
+  $("msgRegistro").textContent = "";
+}
+tipoRegistro("alumno");
 
 // Reglas de registro (el servidor debe repetirlas). Devuelve "" si todo está bien.
 function validarRegistro(d, pass2, acepto) {
-  if (!/^\d{9}$/.test(d.codigo || "")) return "El código de estudiante debe tener 9 dígitos.";
+  var adm = d.tipo == "administrativo";
+  if (adm) { if (!/^\d{6,9}$/.test(d.codigo || "")) return "El número de trabajador debe tener entre 6 y 9 dígitos."; }
+  else if (!/^\d{9}$/.test(d.codigo || "")) return "El código de estudiante debe tener 9 dígitos.";
   var nom = String(d.nombre || "").trim();
   if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]{6,80}$/.test(nom) || nom.split(/\s+/).length < 2) return "Escribe tu nombre completo (nombre y apellidos).";
   if (moderarTexto(nom)) return "El nombre contiene lenguaje no permitido.";
-  if (!/^[a-z0-9._-]+@alumnos\.udg\.mx$/.test(d.correo || "")) return "Usa tu correo institucional (termina en @alumnos.udg.mx).";
-  if (!d.programa) return "Elige tu programa educativo.";
+  var correo = String(d.correo || "");
+  if (adm) {
+    if (!/^[a-z0-9._-]+@([a-z0-9-]+\.)*udg\.mx$/.test(correo) || /@alumnos\.udg\.mx$/.test(correo)) return "Usa tu correo institucional de personal (por ejemplo @academicos.udg.mx o @cucei.udg.mx).";
+  } else if (!/^[a-z0-9._-]+@alumnos\.udg\.mx$/.test(correo)) return "Usa tu correo institucional (termina en @alumnos.udg.mx).";
+  if (!d.programa) return adm ? "Elige tu área o dependencia." : "Elige tu programa educativo.";
   if (d.telefono && String(d.telefono).length != 10) return "El teléfono debe tener 10 dígitos.";
   var p = String(d.pass || "");
   if (p.length < 8 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) return "La contraseña debe tener mínimo 8 caracteres, con letras y números.";
-  if (p == d.codigo) return "La contraseña no puede ser tu código de estudiante.";
+  if (p == d.codigo) return adm ? "La contraseña no puede ser tu número de trabajador." : "La contraseña no puede ser tu código de estudiante.";
   if (p != pass2) return "Las contraseñas no coinciden.";
   if (!acepto) return "Debes aceptar el aviso de privacidad.";
   return "";
@@ -506,7 +561,7 @@ $("r_tel").addEventListener("input", function () {
 $("r_pass2").addEventListener("keydown", function (e) { if (e.key == "Enter") crearCuenta(); });
 function crearCuenta() {
   var m = $("msgRegistro"); m.style.color = "red"; m.textContent = "";
-  var d = { codigo: $("r_codigo").value.trim(), nombre: $("r_nombre").value.trim().replace(/\s+/g, " "), correo: $("r_correo").value.trim().toLowerCase(),
+  var d = { tipo: tipoReg, codigo: $("r_codigo").value.trim(), nombre: $("r_nombre").value.trim().replace(/\s+/g, " "), correo: $("r_correo").value.trim().toLowerCase(),
             programa: $("r_programa").value, telefono: $("r_tel").value.replace(/\D/g, ""), pass: $("r_pass").value };
   var err = validarRegistro(d, $("r_pass2").value, $("r_acepto").checked);
   if (err) { m.textContent = err; return; }
@@ -515,7 +570,7 @@ function crearCuenta() {
     .withSuccessHandler(function () {
       b.disabled = false;
       ["r_codigo", "r_nombre", "r_correo", "r_tel", "r_pass", "r_pass2"].forEach(function (i) { $(i).value = ""; });
-      $("r_programa").value = ""; $("r_acepto").checked = false; fuerzaPass();
+      $("r_acepto").checked = false; fuerzaPass(); tipoRegistro("alumno");
       mostrarLogin(); $("usuario").value = d.codigo; $("contrasena").value = ""; $("contrasena").focus();
       var e = $("mensajeError"); e.style.color = "#1a7f37"; e.textContent = "✓ Cuenta creada. Ya puedes iniciar sesión.";
     })
@@ -556,3 +611,52 @@ function telCargar() {
   $("pf_telefono").value = tel ? tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3") : "";
   $("msgTelefono").textContent = ""; telModo(tel != "");
 }
+
+// ===== OFICIO: SOLICITUD DE MANTENIMIENTO (administrativo → Servicios Generales) =====
+var LOGO_OFICIO = "";   // opcional: pega aquí la URL del logo de CUCEI
+var SERVICIOS = [
+  ["Aire Acondicionado", "", "Aire acondicionado"],
+  ["Carpintería", "(cajoneras, puertas, escritorio)", "Carpintería"],
+  ["Cristales, estructuras aluminio y/o plafones", "", "Cristales / aluminio / plafones"],
+  ["Eléctrico", "", "Eléctrico"],
+  ["Herrería", "(protecciones, puertas, etc)", "Herrería"],
+  ["Hidráulico", "(fugas, baños, etc)", "Plomería / agua"],
+  ["Infraestructura", "(Filtración techos, daño en muros, etc)", "Techo / paredes"],
+  ["Jardinería", "", "Jardinería"],
+  ["Limpieza", "", "Limpieza"],
+  ["Pintura", "", "Pintura"],
+  ["Cerrajería", "", "Cerrajería"],
+  ["Otro", "", "Otro"]
+];
+function fechaOf(ms) {
+  if (!ms) return "____ / ____ / ______";
+  var d = new Date(Number(ms));
+  return ("0" + d.getDate()).slice(-2) + " / " + ("0" + (d.getMonth() + 1)).slice(-2) + " / " + d.getFullYear();
+}
+function telOf(t) { return String(t || "").replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3"); }
+function verOficioId(id) { var r = reportes.filter(function (x) { return x.id == id; })[0]; if (r) verOficio(r); }
+function verOficio(r) {
+  var s = r.solicitante || {};
+  var existe = SERVICIOS.some(function (x) { return x[2] == r.categoria; });
+  var radio = function (on) { return '<i class="' + (on ? "on" : "") + '"></i>'; };
+  var h = '<div class="of-cab">' + (LOGO_OFICIO ? '<img src="' + esc(LOGO_OFICIO) + '" alt="CUCEI">' : '<b class="of-logo">CUCEI</b>') + "COORDINACIÓN DE SERVICIOS GENERALES / UNIDAD DE MANTENIMIENTO</div>";
+  h += '<h2 class="of-tit">SOLICITUD MANTENIMIENTO PREVENTIVO/CORRECTIVO</h2>';
+  h += '<div class="of-tipo"><span>' + radio(r.tipoMant == "Preventivo") + "Preventivo</span><span>" + radio(r.tipoMant != "Preventivo") + "Correctivo</span></div>";
+  h += '<div class="of-fila"><span><b>Fecha de Elaboración:</b> ' + fechaOf(r.fecha) + '</span><span><b>Folio:</b> <u>' + esc(r.folio || "") + "</u></span></div>";
+  h += '<div class="of-fila"><span><b>Recibe:</b> <u class="linea">' + esc(r.recibe || "") + '</u></span><span><b>Fecha de Recepción:</b> ' + fechaOf(r.fechaRecepcion) + "</span></div>";
+  h += '<span class="of-et">Nombre, Firma y Teléfono de contacto del Solicitante:</span><div class="of-caja of-firma"><span>' + esc(s.nombre || "") + (s.telefono ? " · Tel. " + esc(telOf(s.telefono)) : "") + '</span><span class="firma">Firma</span></div>';
+  h += '<span class="of-et">Área Solicitante:</span><div class="of-caja">' + esc(s.area || "") + "</div>";
+  h += '<span class="of-et">Ubicación del Servicio:</span><div class="of-caja">' + esc(r.edificio) + " · " + esc(r.lugar) + "</div>";
+  h += '<span class="of-et">Descripción del servicio solicitado o falla a reparar:</span><div class="of-ops">';
+  h += SERVICIOS.map(function (x) {
+    var on = existe ? x[2] == r.categoria : x[2] == "Otro";
+    return '<span class="of-op">' + radio(on) + "<span>" + x[0] + (x[1] ? " <small>" + x[1] + "</small>" : "") + "</span></span>";
+  }).join("");
+  h += '</div><div class="of-caja of-desc">' + (existe ? "" : "<b>" + esc(r.categoria) + ":</b> ") + esc(r.descripcion);
+  if (r.fotos && r.fotos.length) h += '<div class="of-fotos">' + r.fotos.map(function (u) { return '<img src="' + esc(u) + '" alt="Evidencia">'; }).join("") + "</div>";
+  h += '</div><div class="of-pie">Generado por SIGIR · ' + fechaOf(Date.now()) + "</div>";
+  $("hoja").innerHTML = h;
+  $("oficio").classList.remove("oculto");
+  $("oficio").scrollTop = 0;
+}
+function cerrarOficio() { $("oficio").classList.add("oculto"); }
