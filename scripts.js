@@ -14,10 +14,19 @@
     var l = leer(), limpio = l.filter(function (r) { return !/^d[123]$/.test(r.id); });
     if (limpio.length != l.length) guardar(limpio);
   }
+  var KC = "sigir_cuentas";   // cuentas creadas desde "Crear cuenta" (solo modo local de prueba)
+  function cuentas() { try { return JSON.parse(localStorage.getItem(KC) || "[]"); } catch (e) { return []; } }
+  async function hash(u, p) {   // SOLO DEMO: en producción el servidor guarda el hash con sal
+    var txt = "sigir:" + u + ":" + p;
+    try { var b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)); return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""); }
+    catch (e) { return "b64:" + btoa(unescape(encodeURIComponent(txt))); }
+  }
+  function buscar(u) { return USUARIOS.filter(function (a) { return a.usuario == u; })[0] || cuentas().filter(function (a) { return a.usuario == u; })[0]; }
   function ses(t) { if (!sesiones[t]) throw new Error("Tu sesión expiró. Vuelve a ingresar."); return sesiones[t]; }
   var api = {
-    login: function (u, c) {
+    login: async function (u, c) {
       var x = USUARIOS.filter(function (a) { return a.usuario == u && a.contrasena == c; })[0];
+      if (!x) { var h = await hash(u, c); x = cuentas().filter(function (a) { return a.usuario == u && a.hash == h; })[0]; }
       if (!x) return null;
       var t = Date.now() + "-" + Math.random().toString(36).slice(2);
       sesiones[t] = { usuario: x.usuario, tipo: x.tipo };
@@ -36,8 +45,18 @@
                categoria: d.categoria, descripcion: d.descripcion, fotos: d.fotos.slice(0, 4), estado: "pendiente", nota: "", revision: !!d.revision, vistos: [], comentarios: [] });
       guardar(l); return true;
     },
+    registrar: async function (d) {
+      var e = validarRegistro(d, d.pass, true); if (e) throw new Error(e);
+      if (buscar(d.codigo)) throw new Error("Ese código ya tiene una cuenta. Inicia sesión.");
+      var l = cuentas();
+      if (l.some(function (c) { return c.correo == d.correo; }) || USUARIOS.some(function (c) { return c.correo == d.correo; })) throw new Error("Ese correo ya está registrado.");
+      l.push({ usuario: d.codigo, hash: await hash(d.codigo, d.pass), tipo: "alumno", nombre: d.nombre, correo: d.correo, programa: d.programa, fecha: Date.now() });
+      try { localStorage.setItem(KC, JSON.stringify(l)); } catch (x) { throw new Error("No se pudo guardar la cuenta."); }
+      if (d.telefono) { try { localStorage.setItem("tel_" + d.codigo, d.telefono); } catch (x) {} }
+      return true;
+    },
     perfil: function (t) {   // datos institucionales (solo lectura) + foto
-      var s = ses(t), u = USUARIOS.filter(function (a) { return a.usuario == s.usuario; })[0], f = "";
+      var s = ses(t), u = buscar(s.usuario), f = "";
       try { f = (JSON.parse(localStorage.getItem("sigir_fotos") || "{}"))[s.usuario] || ""; } catch (e) {}
       return { usuario: u.usuario, tipo: u.tipo, nombre: u.nombre, correo: u.correo, programa: u.programa, foto: f };
     },
@@ -81,7 +100,7 @@
       o[n] = function () {
         var a = arguments;
         setTimeout(function () {
-          try { var r = api[n].apply(null, a); if (ok) ok(r); } catch (e) { if (fail) fail(e); }
+          Promise.resolve().then(function () { return api[n].apply(null, a); }).then(function (r) { if (ok) ok(r); }, function (e) { if (fail) fail(e); });
         }, 120);
       };
     });
@@ -375,6 +394,7 @@ function comentar(id, rapido) {
 function aprobar(id) { google.script.run.withSuccessHandler(cargar).withFailureHandler(falla).aprobarFoto(sesion.token, id); }
 
 // ===== PERFIL (alumno y administrador) =====
+// Solo la foto se puede cambiar; los datos institucionales son de solo lectura.
 var yo = null;
 var ROLES = { alumno: "Alumno", academico: "Coordinación · Administrador" };
 function pintarAvatar(el, foto, nombre) {
@@ -382,7 +402,7 @@ function pintarAvatar(el, foto, nombre) {
   el.textContent = foto ? "" : String(nombre || "?").trim().charAt(0).toUpperCase();
 }
 function cargarPerfil() {
-  google.script.run.withSuccessHandler(function (p) { yo = p; pintarPerfil(); }).withFailureHandler(falla).perfil(sesion.token);
+  google.script.run.withSuccessHandler(function (p) { yo = p; pintarPerfil(); telCargar(); }).withFailureHandler(falla).perfil(sesion.token);
 }
 function pintarPerfil() {
   if (!yo) return;
@@ -436,6 +456,73 @@ $("fotoPerfil").onchange = async function (e) {
   guardarFotoPerfil(d, "✓ Foto actualizada.");
 };
 
+// ===== CREAR CUENTA =====
+var PROGRAMAS = ["Ingeniería en Computación","Ingeniería Informática","Licenciatura en Informática","Ingeniería en Comunicaciones y Electrónica","Ingeniería Civil","Ingeniería Industrial","Ingeniería Mecánica Eléctrica","Ingeniería Mecatrónica","Ingeniería Química","Ingeniería Biomédica","Ingeniería Robótica","Ingeniería en Alimentos y Biotecnología","Ingeniería en Logística y Transporte","Licenciatura en Matemáticas","Licenciatura en Física","Licenciatura en Química","Químico Farmacobiólogo","Otro"];
+(function () {
+  var s = $("r_programa"), o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Selecciona tu programa…"; s.appendChild(o0);
+  PROGRAMAS.forEach(function (p) { var o = document.createElement("option"); o.textContent = p; s.appendChild(o); });
+})();
+
+// Reglas de registro (el servidor debe repetirlas). Devuelve "" si todo está bien.
+function validarRegistro(d, pass2, acepto) {
+  if (!/^\d{9}$/.test(d.codigo || "")) return "El código de estudiante debe tener 9 dígitos.";
+  var nom = String(d.nombre || "").trim();
+  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]{6,80}$/.test(nom) || nom.split(/\s+/).length < 2) return "Escribe tu nombre completo (nombre y apellidos).";
+  if (moderarTexto(nom)) return "El nombre contiene lenguaje no permitido.";
+  if (!/^[a-z0-9._-]+@alumnos\.udg\.mx$/.test(d.correo || "")) return "Usa tu correo institucional (termina en @alumnos.udg.mx).";
+  if (!d.programa) return "Elige tu programa educativo.";
+  if (d.telefono && String(d.telefono).length != 10) return "El teléfono debe tener 10 dígitos.";
+  var p = String(d.pass || "");
+  if (p.length < 8 || !/[A-Za-z]/.test(p) || !/\d/.test(p)) return "La contraseña debe tener mínimo 8 caracteres, con letras y números.";
+  if (p == d.codigo) return "La contraseña no puede ser tu código de estudiante.";
+  if (p != pass2) return "Las contraseñas no coinciden.";
+  if (!acepto) return "Debes aceptar el aviso de privacidad.";
+  return "";
+}
+function mostrarRegistro() {
+  $("formLogin").classList.add("oculto"); $("formRegistro").classList.remove("oculto");
+  $("msgRegistro").textContent = ""; $("r_codigo").focus();
+}
+function mostrarLogin() {
+  $("formRegistro").classList.add("oculto"); $("formLogin").classList.remove("oculto"); $("mensajeError").textContent = "";
+}
+function verContrasenaR() {
+  var ver = $("r_pass").type == "password";
+  $("r_pass").type = $("r_pass2").type = ver ? "text" : "password";
+  $("ojoR").textContent = ver ? "Ocultar contraseñas" : "Mostrar contraseñas";
+}
+function fuerzaPass() {
+  var p = $("r_pass").value, n = 0;
+  if (p.length >= 8) n++; if (p.length >= 12) n++; if (/[a-z]/.test(p) && /[A-Z]/.test(p)) n++; if (/\d/.test(p)) n++; if (/[^A-Za-z0-9]/.test(p)) n++;
+  if (!p) n = 0;
+  var b = $("barraFuerza"), t = $("txtFuerza");
+  b.style.width = (n * 20) + "%"; b.style.background = n <= 2 ? "red" : (n == 3 ? "#efb810" : "#1a7f37");
+  t.textContent = !p ? "Mínimo 8 caracteres, con letras y números." : (n <= 2 ? "Contraseña débil" : (n == 3 ? "Contraseña media" : "Contraseña fuerte"));
+}
+$("r_tel").addEventListener("input", function () {
+  var t = this.value.replace(/\D/g, "").slice(0, 10);
+  this.value = t.replace(/^(\d{2})(\d{0,4})(\d{0,4}).*/, function (_, a, b, c) { return a + (b ? " " + b : "") + (c ? " " + c : ""); });
+});
+$("r_pass2").addEventListener("keydown", function (e) { if (e.key == "Enter") crearCuenta(); });
+function crearCuenta() {
+  var m = $("msgRegistro"); m.style.color = "red"; m.textContent = "";
+  var d = { codigo: $("r_codigo").value.trim(), nombre: $("r_nombre").value.trim().replace(/\s+/g, " "), correo: $("r_correo").value.trim().toLowerCase(),
+            programa: $("r_programa").value, telefono: $("r_tel").value.replace(/\D/g, ""), pass: $("r_pass").value };
+  var err = validarRegistro(d, $("r_pass2").value, $("r_acepto").checked);
+  if (err) { m.textContent = err; return; }
+  var b = $("btnRegistro"); b.disabled = true;
+  google.script.run
+    .withSuccessHandler(function () {
+      b.disabled = false;
+      ["r_codigo", "r_nombre", "r_correo", "r_tel", "r_pass", "r_pass2"].forEach(function (i) { $(i).value = ""; });
+      $("r_programa").value = ""; $("r_acepto").checked = false; fuerzaPass();
+      mostrarLogin(); $("usuario").value = d.codigo; $("contrasena").value = ""; $("contrasena").focus();
+      var e = $("mensajeError"); e.style.color = "#1a7f37"; e.textContent = "✓ Cuenta creada. Ya puedes iniciar sesión.";
+    })
+    .withFailureHandler(function (e) { b.disabled = false; m.textContent = (e && e.message) ? e.message.replace(/^Error: /, "") : "No se pudo crear la cuenta."; })
+    .registrar(d);
+}
+
   // ===== Carrusel: cambia de imagen cada 5 segundos =====
   var fotos = document.querySelectorAll(".foto");
   var actual = 0;
@@ -447,46 +534,25 @@ $("fotoPerfil").onchange = async function (e) {
     fotos[actual].classList.add("activa");
   }, 5000);
 
- // ===== TELÉFONO =====
+// ===== TELÉFONO =====
 function telModo(bloqueado) {
-  document.getElementById("pf_telefono").readOnly = bloqueado;
-  document.getElementById("btnTelefono").style.display  = bloqueado ? "none" : "inline-block";
-  document.getElementById("btnEditarTel").style.display = bloqueado ? "inline-block" : "none";
+  $("pf_telefono").readOnly = bloqueado;
+  $("btnTelefono").style.display = bloqueado ? "none" : "inline-block";
+  $("btnEditarTel").style.display = bloqueado ? "inline-block" : "none";
 }
-
-function telEditar() {
-  document.getElementById("msgTelefono").textContent = "";
-  telModo(false);
-  document.getElementById("pf_telefono").focus();
-}
-
+function telEditar() { $("msgTelefono").textContent = ""; telModo(false); $("pf_telefono").focus(); }
 function telGuardar() {
-  var campo = document.getElementById("pf_telefono");
-  var msg = document.getElementById("msgTelefono");
-  var tel = campo.value.replace(/\D/g, "");
-
-  if (tel.length != 10) {
-    msg.style.color = "red";
-    msg.textContent = "Escribe un número de 10 dígitos.";
-    return;
-  }
-
+  var campo = $("pf_telefono"), msg = $("msgTelefono"), tel = campo.value.replace(/\D/g, "");
+  if (tel.length != 10) { msg.style.color = "red"; msg.textContent = "Escribe un número de 10 dígitos."; return; }
   campo.value = tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3");
-  telModo(true);
-  msg.style.color = "green";
-  msg.textContent = "Teléfono guardado.";
-
-  var usuario = document.getElementById("pf_usuario").textContent.trim();
+  telModo(true); msg.style.color = "green"; msg.textContent = "Teléfono guardado.";
+  var usuario = $("pf_usuario").textContent.trim();
   try { localStorage.setItem("tel_" + usuario, tel); } catch (e) {}
   try { google.script.run.guardarTelefono(usuario, tel); } catch (e) {}
 }
-
-// Llama esto al abrir el perfil (después de llenar pf_usuario)
 function telCargar() {
-  var usuario = document.getElementById("pf_usuario").textContent.trim();
-  var tel = "";
+  var usuario = $("pf_usuario").textContent.trim(), tel = "";
   try { tel = localStorage.getItem("tel_" + usuario) || ""; } catch (e) {}
-  document.getElementById("pf_telefono").value = tel ? tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3") : "";
-  document.getElementById("msgTelefono").textContent = "";
-  telModo(tel != "");   // si ya tiene número, entra bloqueado con Editar
+  $("pf_telefono").value = tel ? tel.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3") : "";
+  $("msgTelefono").textContent = ""; telModo(tel != "");
 }
